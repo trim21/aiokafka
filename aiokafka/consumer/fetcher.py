@@ -427,7 +427,9 @@ class Fetcher:
         # waiters directly
         self._subscriptions.register_fetch_waiters(self._fetch_waiters)
 
-        if client.api_version >= (0, 11):
+        if client.api_version >= (2, 1, 0):
+            req_version = 10
+        elif client.api_version >= (0, 11):
             req_version = 4
         elif client.api_version >= (0, 10, 1):
             req_version = 3
@@ -638,14 +640,33 @@ class Fetcher:
             # Shuffle partition data to help get more equal consumption
             random.shuffle(partition_data)
 
-            # Create fetch request
-            by_topics = collections.defaultdict(list)
-            for tp, position in partition_data:
-                by_topics[tp.topic].append(
-                    (tp.partition, position, self._max_partition_fetch_bytes)
-                )
             klass = self._fetch_request_class
-            if klass.API_VERSION > 3:
+            # Create fetch request
+            if klass.API_VERSION == 10:
+                by_topics = collections.defaultdict(list)
+                for tp, position in partition_data:
+                    by_topics[tp.topic].append(
+                        (tp.partition, 0, position, 0, self._max_partition_fetch_bytes)
+                    )
+            else:
+                by_topics = collections.defaultdict(list)
+                for tp, position in partition_data:
+                    by_topics[tp.topic].append(
+                        (tp.partition, position, self._max_partition_fetch_bytes)
+                    )
+            if klass.API_VERSION == 10:
+                req = klass(
+                    -1,  # replica_id
+                    self._fetch_max_wait_ms,
+                    self._fetch_min_bytes,
+                    self._fetch_max_bytes,
+                    self._isolation_level,
+                    0,
+                    0,
+                    list(by_topics.items()),
+                    [],
+                )
+            elif klass.API_VERSION > 3:
                 req = klass(
                     -1,  # replica_id
                     self._fetch_max_wait_ms,
@@ -706,7 +727,11 @@ class Fetcher:
 
         fetch_offsets = {}
         for topic, partitions in request.topics:
-            for partition, offset, _ in partitions:
+            for p in partitions:
+                if len(p) == 3:
+                    partition, offset, _ = p
+                else:
+                    partition, _, _, _, offset = p
                 fetch_offsets[TopicPartition(topic, partition)] = offset
 
         now_ms = int(1000 * time.time())
