@@ -211,6 +211,18 @@ jobs:
       matrix:
         include:
           - python: "3.12"
+            kafka: "3.8.0"
+            scala: "2.13"
+
+          - python: "3.11"
+            kafka: "3.8.0"
+            scala: "2.13"
+
+          - python: "3.10"
+            kafka: "3.8.0"
+            scala: "2.13"
+
+          - python: "3.12"
             kafka: "2.8.1"
             scala: "2.13"
 
